@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 # VARIABLES
 t = 0.0
-dt = 0.01
+dt = 0.005
 
 v_x = 2.0
 x = 0.0
@@ -39,16 +39,15 @@ while y > 0.0:
     if y > flare_altitude:
         k = 0.5
         desired_vx = -k * x  # direct the velocity to the opposite direction
-        desired_vy = -0.3 * v_safe  # stay within stopping capability
-        desired_vy = max(desired_vy, -v_safe)
+        desired_vy = -min(v_safe, 5.0)
         if v_y < desired_vy:
-            desired_vy = -v_safe * 0.8 # allows the rocket "catch up" and actually achieve the v_safe velocity
+            ay_desired = accel_max # allows the rocket "catch up" and actually achieve the v_safe velocity
 
         vx_error = desired_vx - v_x
         vy_error = desired_vy - v_y
         ky = 1.5
         kx = 0.5
-        ay_desired = ky * vy_error
+        ay_desired = ky * (desired_vy - v_y) + 0.5 * (0 - y)
         ay_desired = np.clip(ay_desired, -accel_max, accel_max)
         ax_desired = kx * vx_error
     else:
@@ -59,7 +58,7 @@ while y > 0.0:
 
         kpy = 2.0
         kdy = 3.0
-        ay_desired = kpy * (0 - y) + kdy * (target_vy - v_y)
+        ay_desired = kdy * (target_vy - v_y)
 
         kpx = 1.0
         kdx = 2.0
@@ -74,10 +73,14 @@ while y > 0.0:
     gimbal_angle = kp * theta_error - kd * omega
     gimbal_angle = np.clip(gimbal_angle, -0.26, 0.26, out=None)
 
-    thrust = mass * (g + ay_desired)
+    thrust = mass * g + mass * ay_desired + 5.0 # add margin
     thrust = np.clip(thrust, 0.0, max_thrust)
 
-    # the direction the engine pushes is a combination of the rocket body's tilt and the engine's gimbal tilt
+# initiate full thrust if the rocket is still traveling too fast near the ground
+    if y > 1.0 and abs(v_y) > v_safe:
+        thrust = max_thrust
+
+# the direction the engine pushes is a combination of the rocket body's tilt and the engine's gimbal tilt
 # let theta control the direction of the thrust
     forcex = thrust * np.sin(theta)
     forcey = (thrust * np.cos(theta)) - (mass * g)
